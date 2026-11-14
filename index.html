@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pedidos</title>
+<style>
+:root{--bg:#f3f6f4;--card:#fff;--ink:#14231e;--mute:#5d6f68;--line:#d5dfda;--pri:#0f6b57;--onpri:#fff;--beb:#1f6fb2;--pla:#c2571a;--warn:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px)}
+:root[data-theme="light"]{color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1815;--card:#18241f;--ink:#e8f1ed;--mute:#97aaa2;--line:#2b3c35;--pri:#3fbf9f;--onpri:#06231b;--beb:#6db4ee;--pla:#f0955a;--warn:#f2857d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1815;--card:#18241f;--ink:#e8f1ed;--mute:#97aaa2;--line:#2b3c35;--pri:#3fbf9f;--onpri:#06231b;--beb:#6db4ee;--pla:#f0955a;--warn:#f2857d;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;padding-bottom:calc(74px + env(safe-area-inset-bottom,0px))}
+main{max-width:640px;margin:0 auto;padding:12px}
+h1{font-size:1.3rem;margin:4px 0 12px}
+h2{font-size:1.05rem;margin:18px 0 8px}
+input,textarea,button{font:inherit;color:inherit}
+input,textarea{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:10px;background:var(--card)}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
+textarea{resize:vertical;min-height:64px}
+button{border:0;border-radius:10px;padding:12px 16px;background:var(--pri);color:var(--onpri);font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+button.small{padding:8px 12px}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.row>.fit{flex:0 0 auto}
+.chips{display:flex;gap:8px;margin:10px 0}
+.chip{flex:1;background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
+.chip.on{background:var(--pri);color:var(--onpri);border-color:var(--pri)}
+.item{display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.item .nm{flex:1;min-width:0}
+.item .tp{font-size:.8rem;color:var(--mute)}
+.item.sel{border-color:var(--pri)}
+.qty{display:flex;align-items:center;gap:8px}
+.qty button{width:40px;height:40px;padding:0;font-size:1.3rem}
+.qty b{min-width:20px;text-align:center}
+.bar{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1.5px solid var(--line);padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));gap:8px}
+.bar button{flex:1;background:transparent;color:var(--mute);border:1.5px solid transparent}
+.bar button.on{color:var(--pri);border-color:var(--pri)}
+.order{background:var(--card);border:1.5px solid var(--line);border-left:6px solid var(--pri);border-radius:12px;padding:12px;margin-bottom:10px}
+.order.beb{border-left-color:var(--beb)}.order.pla{border-left-color:var(--pla)}
+.head{display:flex;justify-content:space-between;gap:8px;font-weight:700}
+.time{font-weight:500;color:var(--mute);font-size:.9rem}
+.order ul{margin:8px 0;padding-left:20px}
+.note{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:.92rem;margin:8px 0}
+.empty{color:var(--mute);text-align:center;padding:28px 8px}
+.cnt{display:inline-block;min-width:22px;padding:0 6px;border-radius:11px;background:var(--pri);color:var(--onpri);font-size:.8rem}
+.del{background:transparent;color:var(--warn);padding:8px}
+details{margin-top:14px}summary{cursor:pointer;color:var(--mute)}
+.sum{position:sticky;bottom:calc(66px + env(safe-area-inset-bottom,0px));background:var(--card);border:1.5px solid var(--pri);border-radius:12px;padding:10px;margin-top:12px}
+</style>
+</head>
+<body>
+<div id="off" hidden style="position:fixed;top:0;left:0;right:0;z-index:5;background:var(--warn);color:#fff;text-align:center;padding:6px;font-weight:600">Sin conexión con el servidor</div>
+<main id="app"></main>
+<nav class="bar">
+  <button id="t1" onclick="go('pedido')">Nuevo pedido</button>
+  <button id="t2" onclick="go('cola')">Cola <span class="cnt" id="n">0</span></button>
+  <button id="t3" onclick="go('hechos')">Hechos</button>
+</nav>
+<script>
+let S={menu:[],orders:[],seq:1},ok=true;
+async function api(p,b){try{const r=await fetch(p,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{});if(!r.ok)throw 0;ok=true;return await r.json()}catch(e){ok=false;return null}}
+async function sync(){const s=await api('/api/state');if(s){const ch=JSON.stringify(s)!==JSON.stringify(S);S=s;if(ch){if(view==='cola'||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))render();else document.getElementById('n').textContent=pending('bebida').length+pending('plato').length}}document.getElementById('off').hidden=ok}
+async function act(p,b){const s=await api(p,b||{});if(s){S=s;render()}else alert('Sin conexión con el servidor.')}
+let view='pedido',q='',draft={},mesa='',note='',tab='bebida';
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function go(v){view=v;render()}
+function hora(ts){return new Date(ts).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})}
+function dia(ts){return new Date(ts).toDateString()===new Date().toDateString()?'':new Date(ts).toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'})+' '}
+function qty(n,d){draft[n]=Math.max(0,(draft[n]||0)+d);if(!draft[n])delete draft[n];render(true)}
+function typeOf(n){const m=S.menu.find(x=>x.n===n);return m?m.t:'plato'}
+async function send(){
+  const items=Object.keys(draft).map(n=>({n,t:editTypes[n]||typeOf(n),q:draft[n]}));
+  if(!items.length){alert('Selecciona al menos un producto.');return}
+  const r=editId?await api('/api/edit',{id:editId,mesa:mesa.trim()||'Sin nombre',items,note:note.trim()}):await api('/api/order',{mesa:mesa.trim()||'Sin nombre',items,note:note.trim()});
+  if(!r){alert('Sin conexión con el servidor. El pedido no se envió.');return}
+  S=r;draft={};mesa='';note='';q='';editId=null;editTypes={};view='cola';render();
+}
+function finish(id,t){act('/api/done',{id,t})}
+function addProd(){const n=document.getElementById('np').value.trim(),t=document.getElementById('nt').value;if(n)act('/api/menu/add',{n,t})}
+function delProd(n){delete draft[n];act('/api/menu/del',{n})}
+function pending(t){return S.orders.filter(o=>!o.done[t]&&o.items.some(i=>i.t===t))}
+function render(keepFocus){
+  const a=document.getElementById('app');
+  document.getElementById('t1').className=view==='pedido'?'on':'';
+  document.getElementById('t2').className=view==='cola'?'on':'';
+  document.getElementById('t3').className=view==='hechos'||view==='resumen'?'on':'';
+  document.getElementById('n').textContent=pending('bebida').length+pending('plato').length;
+  if(view==='pedido'){
+    const extra=Object.keys(draft).filter(n=>!S.menu.some(m=>m.n===n)).map(n=>({n,t:editTypes[n]||'plato'}));
+    const list=[...extra,...S.menu].filter(m=>m.n.toLowerCase().includes(q.toLowerCase()));
+    const total=Object.values(draft).reduce((a,b)=>a+b,0);
+    a.innerHTML=`<h1>${editId?'Editando pedido #'+editId:'Nuevo pedido'}</h1>
+    <input id="mesa" placeholder="Mesa o nombre del cliente" value="${esc(mesa)}" oninput="mesa=this.value">
+    <h2>Buscar producto</h2>
+    <input id="q" type="search" placeholder="Escribe para buscar…" value="${esc(q)}" oninput="q=this.value;render(true)">
+    <div style="margin-top:10px">${list.length?list.map(m=>`<div class="item ${draft[m.n]?'sel':''}">
+      <div class="nm"><div>${esc(m.n)}</div><div class="tp">${m.t==='bebida'?'Bebida':'Plato'}</div></div>
+      <div class="qty"><button class="ghost" aria-label="Quitar ${esc(m.n)}" onclick="qty('${esc(m.n).replace(/'/g,"\\'")}',-1)">−</button><b>${draft[m.n]||0}</b><button aria-label="Agregar ${esc(m.n)}" onclick="qty('${esc(m.n).replace(/'/g,"\\'")}',1)">+</button></div></div>`).join(''):'<div class="empty">No hay resultados. Agrégalo abajo en “Administrar menú”.</div>'}</div>
+    <h2>Comentarios del pedido</h2>
+    <textarea id="note" placeholder="Ej: sin hielo, sin cebolla, para llevar" oninput="note=this.value">${esc(note)}</textarea>
+    <div class="sum"><div class="row"><div>${total} producto${total===1?'':'s'} seleccionado${total===1?'':'s'}</div>${editId?'<button class="ghost fit" onclick="cancelEdit()">Cancelar</button>':''}<button class="fit" onclick="send()">${editId?'Guardar cambios':'Enviar a cola'}</button></div></div>
+    <details><summary>Administrar menú</summary>
+      <div class="row" style="margin:10px 0"><input id="np" placeholder="Nuevo producto"><select id="nt" class="fit" style="padding:12px;border-radius:10px;border:1.5px solid var(--line);background:var(--card);color:var(--ink)"><option value="bebida">Bebida</option><option value="plato">Plato</option></select></div>
+      <button onclick="addProd()" style="width:100%">Agregar al menú</button>
+      <div style="margin-top:10px">${S.menu.map(m=>`<div class="row" style="padding:4px 0"><span>${esc(m.n)} <span class="tp">(${m.t})</span></span><button class="del fit" onclick="delProd('${esc(m.n).replace(/'/g,"\\'")}')">Quitar</button></div>`).join('')}</div>
+    </details>`;
+    if(keepFocus){const f=document.getElementById('q');if(f&&document.activeElement===document.body&&q){f.focus();f.setSelectionRange(q.length,q.length)}}
+  }else if(view==='resumen'){
+    const tot={};S.orders.forEach(o=>o.items.forEach(i=>{const k=i.t+'|'+i.n;tot[k]=(tot[k]||0)+i.q}));
+    const rows=t=>Object.keys(tot).filter(k=>k.startsWith(t+'|')).map(k=>[k.slice(t.length+1),tot[k]]).sort((x,y)=>y[1]-x[1]);
+    const B=rows('bebida'),P=rows('plato'),sm=r=>r.reduce((x,y)=>x+y[1],0),np=S.orders.filter(pending2).length;
+    const sec=(t,r)=>`<h2>${t} (${sm(r)})</h2>`+(r.length?r.map(x=>`<div class="item"><div class="nm">${esc(x[0])}</div><b style="font-size:1.2rem">${x[1]}</b></div>`).join(''):'<div class="empty">Sin registros.</div>');
+    RES='Resumen del día '+new Date().toLocaleDateString('es-PE')+'\nPedidos: '+S.orders.length+'\n\nBEBIDAS ('+sm(B)+')\n'+B.map(x=>x[1]+' × '+x[0]).join('\n')+'\n\nPLATOS ('+sm(P)+')\n'+P.map(x=>x[1]+' × '+x[0]).join('\n');
+    a.innerHTML=`<h1>Resumen del día</h1>
+    <div>${S.orders.length} pedido${S.orders.length===1?'':'s'} registrado${S.orders.length===1?'':'s'}</div>
+    ${np?`<div class="note" style="margin-top:8px">Hay ${np} pedido${np===1?'':'s'} sin terminar en la cola. También se cuentan aquí.</div>`:''}
+    ${sec('Bebidas',B)}${sec('Platos',P)}
+    <div class="row" style="margin-top:16px"><button class="ghost" onclick="copyRes()">Copiar resumen</button><button class="ghost" onclick="go('hechos')">Volver</button></div>
+    <button style="width:100%;margin-top:10px;background:var(--warn);color:#fff" onclick="closeDay()">Cerrar día y borrar pedidos</button>`;
+  }else if(view==='hechos'){
+    const dn=S.orders.filter(o=>!pending2(o)).reverse();
+    a.innerHTML=`<h1>Pedidos hechos (${dn.length})</h1>
+    <button style="width:100%;margin-bottom:12px" onclick="go('resumen')">Finalizar día</button>
+    ${dn.length?dn.map(o=>`<div class="order">
+      <div class="head"><span>${esc(o.mesa)} · #${o.id}</span><span class="time">${dia(o.ts)}${hora(o.ts)}${o.doneTs?' → listo '+hora(o.doneTs):''}${mod(o)}</span></div>
+      <ul>${o.items.map(i=>`<li>${i.q} × ${esc(i.n)} <span class="tp">(${i.t==='bebida'?'bebida':'plato'})</span></li>`).join('')}</ul>
+      ${o.note?`<div class="note"><b>Comentario:</b> ${esc(o.note)}</div>`:''}<button class="small ghost" onclick="startEdit(${o.id})">Editar</button></div>`).join(''):'<div class="empty">Aún no hay pedidos terminados.</div>'}
+    ${dn.length?`<details><summary>Borrar historial</summary><button class="ghost" style="margin-top:10px" onclick="if(confirm('¿Borrar todos los pedidos hechos?'))act('/api/clear')">Borrar pedidos hechos</button></details>`:''}`;
+  }else{
+    const pb=pending('bebida'),pp=pending('plato');
+    const cur=tab==='bebida'?pb:pp;
+    a.innerHTML=`<h1>Pedidos en cola</h1>
+    <div class="chips"><button class="chip ${tab==='bebida'?'on':''}" onclick="tab='bebida';render()">Bebidas (${pb.length})</button><button class="chip ${tab==='plato'?'on':''}" onclick="tab='plato';render()">Platos (${pp.length})</button></div>
+    ${cur.length?cur.map(o=>`<div class="order ${tab==='bebida'?'beb':'pla'}">
+      <div class="head"><span>${esc(o.mesa)} · #${o.id}</span><span class="time">Creado ${hora(o.ts)}${mod(o)}</span></div>
+      <ul>${o.items.filter(i=>i.t===tab).map(i=>`<li>${i.q} × ${esc(i.n)}</li>`).join('')}</ul>
+      ${o.note?`<div class="note"><b>Comentario:</b> ${esc(o.note)}</div>`:''}
+      <div class="row"><button class="small" onclick="finish(${o.id},'${tab}')">Marcar como listo</button><button class="small ghost fit" onclick="startEdit(${o.id})">Editar</button></div></div>`).join(''):`<div class="empty">No hay ${tab==='bebida'?'bebidas':'platos'} pendientes.</div>`}`;
+  }
+}
+let RES='',editId=null,editTypes={};
+function mod(o){return o.editTs?' · modificado '+hora(o.editTs):''}
+function startEdit(id){const o=S.orders.find(x=>x.id===id);if(!o)return;draft={};editTypes={};o.items.forEach(i=>{draft[i.n]=i.q;editTypes[i.n]=i.t});mesa=o.mesa;note=o.note||'';editId=id;q='';view='pedido';render()}
+function cancelEdit(){editId=null;editTypes={};draft={};mesa='';note='';q='';view='cola';render()}
+function copyRes(){
+  const done=()=>alert('Resumen copiado.');
+  const fb=()=>{const t=document.createElement('textarea');t.value=RES;document.body.appendChild(t);t.select();try{document.execCommand('copy');done()}catch(e){alert('No se pudo copiar.')}t.remove()};
+  if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(RES).then(done,fb);else fb();
+}
+function closeDay(){
+  if(!S.orders.length){alert('No hay pedidos para cerrar.');return}
+  if(confirm('¿Cerrar el día? Se borrarán todos los pedidos (hechos y pendientes). Copia el resumen antes si lo necesitas.')){view='hechos';act('/api/close')}
+}
+function pending2(o){return ['bebida','plato'].some(t=>o.items.some(i=>i.t===t)&&!o.done[t])}
+render();sync();setInterval(sync,2000);
+</script>
+</body>
+</html>
